@@ -1,3 +1,4 @@
+// Package main provides an example of using the vrata library.
 package main
 
 import (
@@ -9,20 +10,32 @@ import (
 	"github.com/korya/vrata"
 )
 
+const (
+	// Example server port.
+	serverPort = 8080
+	// Server timeout in seconds.
+	serverTimeout = 30 * time.Second
+)
+
 func main() {
 	// Start a simple HTTP server on port 8080
 	go func() {
-		http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-			fmt.Fprintf(w, "Hello from Go localtunnel! Time: %s\n", time.Now().Format(time.RFC3339))
+		http.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = fmt.Fprintf(w, "Hello from Go localtunnel! Time: %s\n", time.Now().Format(time.RFC3339))
 		})
 
-		http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		http.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusOK)
-			fmt.Fprintf(w, "OK")
+			_, _ = fmt.Fprintf(w, "OK")
 		})
 
 		log.Println("Starting local server on :8080")
-		if err := http.ListenAndServe(":8080", nil); err != nil {
+		server := &http.Server{
+			Addr:         ":8080",
+			ReadTimeout:  serverTimeout,
+			WriteTimeout: serverTimeout,
+		}
+		if err := server.ListenAndServe(); err != nil {
 			log.Fatalf("Local server failed: %v", err)
 		}
 	}()
@@ -32,23 +45,24 @@ func main() {
 
 	// Create tunnel options
 	options := &vrata.TunnelOptions{
-		Port:      8080,
+		Port:      serverPort,
 		Host:      "https://localtunnel.me",
 		Subdomain: "", // Let server assign random subdomain
 		LocalHost: "localhost",
 	}
 
 	// Create and open tunnel
-	tunnel, err := vrata.ConnectAndOpen(8080, options)
+	tunnel, err := vrata.ConnectAndOpen(serverPort, options)
 	if err != nil {
 		log.Fatalf("Failed to create tunnel: %v", err)
 	}
-	defer tunnel.Close()
+	defer func() { _ = tunnel.Close() }()
 
 	// Get the tunnel URL
 	url, err := tunnel.URL()
 	if err != nil {
-		log.Fatalf("Failed to get tunnel URL: %v", err)
+		log.Printf("Failed to get tunnel URL: %v", err)
+		return
 	}
 
 	fmt.Printf("🌍 Tunnel is live at: %s\n", url)

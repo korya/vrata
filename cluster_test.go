@@ -180,11 +180,12 @@ func TestExtractRequestInfo(t *testing.T) {
 
 func TestTunnelConnectionConnect(t *testing.T) {
 	// Start a local TCP server for testing
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	lc := &net.ListenConfig{}
+	listener, err := lc.Listen(context.Background(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("Failed to start test server: %v", err)
 	}
-	defer listener.Close()
+	defer func() { _ = listener.Close() }()
 
 	// Get the actual port
 	addr := listener.Addr().(*net.TCPAddr)
@@ -222,7 +223,7 @@ func TestTunnelConnectionConnect(t *testing.T) {
 		if err != nil {
 			return
 		}
-		testConn.Close()
+		_ = testConn.Close()
 	}()
 
 	// This should connect successfully

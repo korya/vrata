@@ -6,13 +6,13 @@ import (
 	"fmt"
 )
 
-// Connect creates a new tunnel with the given port and options
-// This is the main API function equivalent to the Node.js localtunnel() function
+// Connect creates a new tunnel with the given port and options.
+// This is the main API function equivalent to the Node.js localtunnel() function.
 func Connect(port int, options *TunnelOptions) (*Tunnel, error) {
 	return NewTunnel(port, options)
 }
 
-// ConnectAndOpen creates and opens a tunnel in one call
+// ConnectAndOpen creates and opens a tunnel in one call.
 func ConnectAndOpen(port int, options *TunnelOptions) (*Tunnel, error) {
 	tunnel, err := NewTunnel(port, options)
 	if err != nil {
@@ -26,7 +26,7 @@ func ConnectAndOpen(port int, options *TunnelOptions) (*Tunnel, error) {
 	return tunnel, nil
 }
 
-// ConnectWithContext creates a tunnel with a context for cancellation
+// ConnectWithContext creates a tunnel with a context for cancellation.
 func ConnectWithContext(ctx context.Context, port int, options *TunnelOptions) (*Tunnel, error) {
 	tunnel, err := NewTunnel(port, options)
 	if err != nil {
@@ -39,15 +39,16 @@ func ConnectWithContext(ctx context.Context, port int, options *TunnelOptions) (
 	return tunnel, nil
 }
 
-// Example usage function for documentation
+// ExampleUsage demonstrates basic tunnel usage.
 func ExampleUsage() {
 	// Basic usage
-	tunnel, err := Connect(8080, nil)
+	const defaultPort = 8080
+	tunnel, err := Connect(defaultPort, nil)
 	if err != nil {
 		fmt.Printf("Error: %v\n", err)
 		return
 	}
-	defer tunnel.Close()
+	defer func() { _ = tunnel.Close() }() //nolint:errcheck // best-effort cleanup in example
 
 	// Open the tunnel
 	if err := tunnel.Open(); err != nil {

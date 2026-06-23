@@ -1,3 +1,4 @@
+// Package main provides the vrata command-line tool.
 package main
 
 import (
@@ -9,12 +10,11 @@ import (
 	"os/signal"
 	"strconv"
 	"syscall"
-	"time"
 
 	"github.com/korya/vrata"
 )
 
-// CLI options
+// CLI options.
 var (
 	port       = flag.Int("port", 0, "Internal HTTP server port")
 	portShort  = flag.Int("p", 0, "Internal HTTP server port (short)")
@@ -32,6 +32,7 @@ var (
 	version    = flag.Bool("version", false, "Show version")
 )
 
+// VERSION is the current version of the application.
 const VERSION = "1.0.0"
 
 func usage() {
@@ -141,7 +142,7 @@ func main() {
 	go func() {
 		<-sigChan
 		fmt.Println("\nShutting down tunnel...")
-		tunnel.Close()
+		_ = tunnel.Close() //nolint:errcheck // best-effort shutdown
 		cancel()
 	}()
 
@@ -172,10 +173,16 @@ func main() {
 			select {
 			case req := <-events.Request:
 				if *printReqs {
-					fmt.Printf("%s %s %s\n",
-						time.Now().Format("15:04:05"),
+					// Format like localtunnel: timestamp method=GET path=/ connect=1ms service=37ms status=200 bytes=290
+					fmt.Printf("%s method=%s path=%s connect=%v service=%v status=%d bytes=%d\n",
+						req.Timestamp.Format("2006-01-02T15:04:05.000000Z07:00"),
 						req.Method,
-						req.Path)
+						req.Path,
+						req.ConnectTime,
+						req.ServiceTime,
+						req.Status,
+						req.Bytes,
+					)
 				}
 			case err := <-events.Error:
 				fmt.Printf("Tunnel error: %v\n", err)

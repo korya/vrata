@@ -101,17 +101,19 @@ func TestTunnelEvents(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewTunnel() failed: %v", err)
 	}
-	defer tunnel.Close()
+	defer func() { _ = tunnel.Close() }()
 
 	events := tunnel.Events()
 	if events == nil {
 		t.Error("Events() returned nil")
+		return
 	}
 	if events.URL == nil {
 		t.Error("URL channel is nil")
 	}
 	if events.Error == nil {
 		t.Error("Error channel is nil")
+		return
 	}
 	if events.Request == nil {
 		t.Error("Request channel is nil")
@@ -127,7 +129,7 @@ func TestRequestTunnelMockServer(t *testing.T) {
 		if r.URL.Query().Get("new") == "" {
 			w.WriteHeader(http.StatusOK)
 			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte(`{
+			_, _ = w.Write([]byte(`{
 				"id": "test-tunnel-id",
 				"url": "https://test-tunnel.localtunnel.me",
 				"port": 12345,
@@ -179,7 +181,7 @@ func TestRequestTunnelWithSubdomain(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusOK)
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{
+		_, _ = w.Write([]byte(`{
 			"id": "test-id",
 			"url": "https://mysubdomain.localtunnel.me",
 			"port": 12345,
@@ -210,7 +212,7 @@ func TestRequestTunnelWithSubdomain(t *testing.T) {
 
 func TestTunnelTimeout(t *testing.T) {
 	// Create a mock server that hangs
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 		time.Sleep(20 * time.Second) // Longer than client timeout
 	}))
 	defer server.Close()
@@ -236,7 +238,7 @@ func TestConnectAPI(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Connect() failed: %v", err)
 	}
-	defer tunnel.Close()
+	defer func() { _ = tunnel.Close() }()
 
 	if tunnel.options.Port != 8080 {
 		t.Errorf("Expected port 8080, got %d", tunnel.options.Port)
@@ -251,16 +253,16 @@ func TestTunnelWithContext(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ConnectWithContext() failed: %v", err)
 	}
-	defer tunnel.Close()
+	defer func() { _ = tunnel.Close() }()
 
 	// Test that canceling the parent context cancels the tunnel context
 	cancel()
 
 	select {
 	case <-tunnel.ctx.Done():
-		// Good, tunnel context was cancelled when parent was cancelled
+		// Good, tunnel context was canceled when parent was canceled
 	case <-time.After(100 * time.Millisecond):
-		t.Error("Tunnel context should be cancelled when parent context is cancelled")
+		t.Error("Tunnel context should be canceled when parent context is canceled")
 	}
 }
 

@@ -14,10 +14,11 @@ func TestConnect(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Connect() failed: %v", err)
 	}
-	defer tunnel.Close()
+	defer func() { _ = tunnel.Close() }()
 
 	if tunnel == nil {
 		t.Error("Connect() returned nil tunnel")
+		return
 	}
 	if tunnel.options.Port != 8080 {
 		t.Errorf("Expected port 8080, got %d", tunnel.options.Port)
@@ -26,10 +27,10 @@ func TestConnect(t *testing.T) {
 
 func TestConnectAndOpen(t *testing.T) {
 	// Create a mock server for the tunnel registration
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{
+		_, _ = w.Write([]byte(`{
 			"id": "test-tunnel-id",
 			"url": "https://test.localtunnel.me",
 			"port": 12345,
@@ -39,9 +40,9 @@ func TestConnectAndOpen(t *testing.T) {
 	defer server.Close()
 
 	// Start a local HTTP server on a random port
-	localServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	localServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Hello World"))
+		_, _ = w.Write([]byte("Hello World"))
 	}))
 	defer localServer.Close()
 
@@ -58,7 +59,7 @@ func TestConnectAndOpen(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ConnectAndOpen() failed: %v", err)
 	}
-	defer tunnel.Close()
+	defer func() { _ = tunnel.Close() }()
 
 	// Should have tunnel info set
 	if tunnel.info == nil {
@@ -84,7 +85,7 @@ func TestConnectWithContext(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ConnectWithContext() failed: %v", err)
 	}
-	defer tunnel.Close()
+	defer func() { _ = tunnel.Close() }()
 
 	if tunnel.ctx == nil {
 		t.Error("Tunnel context should be set")
@@ -114,17 +115,17 @@ func TestConnectWithContextCancel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ConnectWithContext() failed: %v", err)
 	}
-	defer tunnel.Close()
+	defer func() { _ = tunnel.Close() }()
 
 	// Cancel the context immediately
 	cancel()
 
-	// Tunnel's context should be cancelled
+	// Tunnel's context should be canceled
 	select {
 	case <-tunnel.ctx.Done():
 		// Expected
 	case <-time.After(100 * time.Millisecond):
-		t.Error("Tunnel context should be cancelled when parent context is cancelled")
+		t.Error("Tunnel context should be canceled when parent context is canceled")
 	}
 }
 
@@ -141,7 +142,7 @@ func TestConnectWithOptions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Connect() failed: %v", err)
 	}
-	defer tunnel.Close()
+	defer func() { _ = tunnel.Close() }()
 
 	// Verify options are properly set
 	if tunnel.options.Host != "https://example.com" {
@@ -164,14 +165,14 @@ func TestConnectInvalidPort(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Connect() with port 0 failed: %v", err)
 	}
-	defer tunnel.Close()
+	defer func() { _ = tunnel.Close() }()
 
 	if tunnel.options.Port != 0 {
 		t.Errorf("Expected port 0, got %d", tunnel.options.Port)
 	}
 }
 
-// Add import for net package in the cluster_test.go fix
+// Add import for net package in the cluster_test.go fix.
 func init() {
 	// This ensures the net package is imported for cluster_test.go
 }

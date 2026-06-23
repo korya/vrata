@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-// TunnelOptions holds configuration for creating a tunnel
+// TunnelOptions holds configuration for creating a tunnel.
 type TunnelOptions struct {
 	Port       int
 	Host       string
@@ -24,7 +24,7 @@ type TunnelOptions struct {
 	LocalHTTPS bool
 }
 
-// TunnelInfo represents the server response for tunnel creation
+// TunnelInfo represents the server response for tunnel creation.
 type TunnelInfo struct {
 	ID      string `json:"id"`
 	URL     string `json:"url"`
@@ -32,14 +32,19 @@ type TunnelInfo struct {
 	MaxConn int    `json:"max_conn_count"`
 }
 
-// RequestInfo contains information about proxied requests
+// RequestInfo contains information about proxied requests.
 type RequestInfo struct {
-	Method string
-	Path   string
-	URL    string
+	Method      string
+	Path        string
+	URL         string
+	ConnectTime time.Duration
+	ServiceTime time.Duration
+	Status      int
+	Bytes       int64
+	Timestamp   time.Time
 }
 
-// TunnelEvents provides channels for tunnel events
+// TunnelEvents provides channels for tunnel events.
 type TunnelEvents struct {
 	URL     chan string
 	Error   chan error
@@ -47,7 +52,7 @@ type TunnelEvents struct {
 	Close   chan struct{}
 }
 
-// Tunnel represents a localtunnel connection
+// Tunnel represents a localtunnel connection.
 type Tunnel struct {
 	options *TunnelOptions
 	info    *TunnelInfo
@@ -59,7 +64,7 @@ type Tunnel struct {
 	mutex   sync.RWMutex
 }
 
-// NewTunnel creates a new tunnel instance
+// NewTunnel creates a new tunnel instance.
 func NewTunnel(port int, options *TunnelOptions) (*Tunnel, error) {
 	if options == nil {
 		options = &TunnelOptions{}
@@ -67,18 +72,22 @@ func NewTunnel(port int, options *TunnelOptions) (*Tunnel, error) {
 	options.Port = port
 
 	if options.Host == "" {
-		options.Host = "https://localtunnel.me"
+		const defaultHost = "https://localtunnel.me"
+		options.Host = defaultHost
 	}
 	if options.LocalHost == "" {
-		options.LocalHost = "localhost"
+		const defaultLocalHost = "localhost"
+		options.LocalHost = defaultLocalHost
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 
+	const errorChanSize = 10
+	const requestChanSize = 100
 	events := &TunnelEvents{
 		URL:     make(chan string, 1),
-		Error:   make(chan error, 10),
-		Request: make(chan RequestInfo, 100),
+		Error:   make(chan error, errorChanSize),
+		Request: make(chan RequestInfo, requestChanSize),
 		Close:   make(chan struct{}, 1),
 	}
 
@@ -90,7 +99,7 @@ func NewTunnel(port int, options *TunnelOptions) (*Tunnel, error) {
 	}, nil
 }
 
-// Open establishes the tunnel connection
+// Open establishes the tunnel connection.
 func (t *Tunnel) Open() error {
 	// Register with the localtunnel server
 	info, err := t.requestTunnel()
@@ -128,7 +137,7 @@ func (t *Tunnel) Open() error {
 	return nil
 }
 
-// Close shuts down the tunnel
+// Close shuts down the tunnel.
 func (t *Tunnel) Close() error {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
@@ -152,11 +161,11 @@ func (t *Tunnel) Close() error {
 	return nil
 }
 
-// URL returns the tunnel URL (blocking until available)
+// URL returns the tunnel URL (blocking until available).
 func (t *Tunnel) URL() (string, error) {
 	select {
-	case url := <-t.events.URL:
-		return url, nil
+	case tunnelURL := <-t.events.URL:
+		return tunnelURL, nil
 	case err := <-t.events.Error:
 		return "", err
 	case <-t.ctx.Done():
@@ -164,12 +173,12 @@ func (t *Tunnel) URL() (string, error) {
 	}
 }
 
-// Events returns the events channels
+// Events returns the events channels.
 func (t *Tunnel) Events() *TunnelEvents {
 	return t.events
 }
 
-// requestTunnel makes an HTTP request to get tunnel info from the server
+// requestTunnel makes an HTTP request to get tunnel info from the server.
 func (t *Tunnel) requestTunnel() (*TunnelInfo, error) {
 	reqURL := t.options.Host
 	if t.options.Subdomain != "" {
@@ -185,15 +194,20 @@ func (t *Tunnel) requestTunnel() (*TunnelInfo, error) {
 		reqURL += "?new="
 	}
 
+	const requestTimeout = 10 * time.Second
 	client := &http.Client{
-		Timeout: 10 * time.Second,
+		Timeout: requestTimeout,
 	}
 
-	resp, err := client.Get(reqURL)
+	req, err := http.NewRequestWithContext(context.Background(), "GET", reqURL, http.NoBody)
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = resp.Body.Close() }() //nolint:errcheck // best-effort cleanup of response body
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("server responded with status %d", resp.StatusCode)
@@ -207,10 +221,10 @@ func (t *Tunnel) requestTunnel() (*TunnelInfo, error) {
 	return &info, nil
 }
 
-// OpenURL opens a URL in the default browser
-func OpenURL(url string) error {
+// OpenURL opens a URL in the default browser.
+func OpenURL(target string) error {
 	var cmd string
-	var args []string
+	args := make([]string, 0, 1)
 
 	switch runtime.GOOS {
 	case "windows":
@@ -221,21 +235,21 @@ func OpenURL(url string) error {
 	default: // linux, freebsd, openbsd, netbsd
 		cmd = "xdg-open"
 	}
-	args = append(args, url)
-	return exec.Command(cmd, args...).Start()
+	args = append(args, target)
+	return exec.CommandContext(context.Background(), cmd, args...).Start() // #nosec G204 - Command is constructed safely
 }
 
-// HeaderHostTransformer modifies HTTP headers to use localhost
+// HeaderHostTransformer modifies HTTP headers to use localhost.
 type HeaderHostTransformer struct {
 	host string
 }
 
-// NewHeaderHostTransformer creates a new header transformer
+// NewHeaderHostTransformer creates a new header transformer.
 func NewHeaderHostTransformer(host string) *HeaderHostTransformer {
 	return &HeaderHostTransformer{host: host}
 }
 
-// Transform modifies the request headers
+// Transform modifies the request headers.
 func (h *HeaderHostTransformer) Transform(reader io.Reader, writer io.Writer) error {
 	scanner := bufio.NewScanner(reader)
 
@@ -245,20 +259,28 @@ func (h *HeaderHostTransformer) Transform(reader io.Reader, writer io.Writer) er
 	}
 
 	firstLine := scanner.Text()
-	fmt.Fprintf(writer, "%s\r\n", firstLine)
+	if _, err := fmt.Fprintf(writer, "%s\r\n", firstLine); err != nil {
+		return err
+	}
 
 	// Read and transform headers
 	for scanner.Scan() {
 		line := scanner.Text()
 		if line == "" {
-			fmt.Fprintf(writer, "\r\n")
+			if _, err := fmt.Fprintf(writer, "\r\n"); err != nil {
+				return err
+			}
 			break
 		}
 
 		if strings.HasPrefix(strings.ToLower(line), "host:") {
-			fmt.Fprintf(writer, "Host: %s\r\n", h.host)
+			if _, err := fmt.Fprintf(writer, "Host: %s\r\n", h.host); err != nil {
+				return err
+			}
 		} else {
-			fmt.Fprintf(writer, "%s\r\n", line)
+			if _, err := fmt.Fprintf(writer, "%s\r\n", line); err != nil {
+				return err
+			}
 		}
 	}
 
