@@ -34,9 +34,14 @@ type TunnelInfo struct {
 
 // RequestInfo contains information about proxied requests.
 type RequestInfo struct {
-	Method string
-	Path   string
-	URL    string
+	Method      string
+	Path        string
+	URL         string
+	ConnectTime time.Duration
+	ServiceTime time.Duration
+	Status      int
+	Bytes       int64
+	Timestamp   time.Time
 }
 
 // TunnelEvents provides channels for tunnel events.
@@ -159,8 +164,8 @@ func (t *Tunnel) Close() error {
 // URL returns the tunnel URL (blocking until available).
 func (t *Tunnel) URL() (string, error) {
 	select {
-	case url := <-t.events.URL:
-		return url, nil
+	case tunnelURL := <-t.events.URL:
+		return tunnelURL, nil
 	case err := <-t.events.Error:
 		return "", err
 	case <-t.ctx.Done():
@@ -202,7 +207,7 @@ func (t *Tunnel) requestTunnel() (*TunnelInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer func() { _ = resp.Body.Close() }() //nolint:errcheck // best-effort cleanup of response body
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("server responded with status %d", resp.StatusCode)
@@ -217,9 +222,9 @@ func (t *Tunnel) requestTunnel() (*TunnelInfo, error) {
 }
 
 // OpenURL opens a URL in the default browser.
-func OpenURL(url string) error {
+func OpenURL(target string) error {
 	var cmd string
-	var args []string
+	args := make([]string, 0, 1)
 
 	switch runtime.GOOS {
 	case "windows":
@@ -230,7 +235,7 @@ func OpenURL(url string) error {
 	default: // linux, freebsd, openbsd, netbsd
 		cmd = "xdg-open"
 	}
-	args = append(args, url)
+	args = append(args, target)
 	return exec.CommandContext(context.Background(), cmd, args...).Start() // #nosec G204 - Command is constructed safely
 }
 
@@ -254,20 +259,28 @@ func (h *HeaderHostTransformer) Transform(reader io.Reader, writer io.Writer) er
 	}
 
 	firstLine := scanner.Text()
-	_, _ = fmt.Fprintf(writer, "%s\r\n", firstLine)
+	if _, err := fmt.Fprintf(writer, "%s\r\n", firstLine); err != nil {
+		return err
+	}
 
 	// Read and transform headers
 	for scanner.Scan() {
 		line := scanner.Text()
 		if line == "" {
-			_, _ = fmt.Fprintf(writer, "\r\n")
+			if _, err := fmt.Fprintf(writer, "\r\n"); err != nil {
+				return err
+			}
 			break
 		}
 
 		if strings.HasPrefix(strings.ToLower(line), "host:") {
-			_, _ = fmt.Fprintf(writer, "Host: %s\r\n", h.host)
+			if _, err := fmt.Fprintf(writer, "Host: %s\r\n", h.host); err != nil {
+				return err
+			}
 		} else {
-			_, _ = fmt.Fprintf(writer, "%s\r\n", line)
+			if _, err := fmt.Fprintf(writer, "%s\r\n", line); err != nil {
+				return err
+			}
 		}
 	}
 

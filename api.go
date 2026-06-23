@@ -48,7 +48,7 @@ func ExampleUsage() {
 		fmt.Printf("Error: %v\n", err)
 		return
 	}
-	defer func() { _ = tunnel.Close() }()
+	defer func() { _ = tunnel.Close() }() //nolint:errcheck // best-effort cleanup in example
 
 	// Open the tunnel
 	if err := tunnel.Open(); err != nil {

@@ -10,7 +10,6 @@ import (
 	"os/signal"
 	"strconv"
 	"syscall"
-	"time"
 
 	"github.com/korya/vrata"
 )
@@ -143,7 +142,7 @@ func main() {
 	go func() {
 		<-sigChan
 		fmt.Println("\nShutting down tunnel...")
-		_ = tunnel.Close()
+		_ = tunnel.Close() //nolint:errcheck // best-effort shutdown
 		cancel()
 	}()
 
@@ -174,10 +173,16 @@ func main() {
 			select {
 			case req := <-events.Request:
 				if *printReqs {
-					fmt.Printf("%s %s %s\n",
-						time.Now().Format("15:04:05"),
+					// Format like localtunnel: timestamp method=GET path=/ connect=1ms service=37ms status=200 bytes=290
+					fmt.Printf("%s method=%s path=%s connect=%v service=%v status=%d bytes=%d\n",
+						req.Timestamp.Format("2006-01-02T15:04:05.000000Z07:00"),
 						req.Method,
-						req.Path)
+						req.Path,
+						req.ConnectTime,
+						req.ServiceTime,
+						req.Status,
+						req.Bytes,
+					)
 				}
 			case err := <-events.Error:
 				fmt.Printf("Tunnel error: %v\n", err)

@@ -173,7 +173,7 @@ func (conn *TunnelConnection) handleConnection(ctx context.Context) {
 
 		// Set read deadline
 		const readTimeout = 60 * time.Second
-		_ = conn.conn.SetReadDeadline(time.Now().Add(readTimeout))
+		_ = conn.conn.SetReadDeadline(time.Now().Add(readTimeout)) //nolint:errcheck // best-effort deadline
 
 		// Create connection to local server
 		localConn, err := conn.connectToLocal()
@@ -214,7 +214,7 @@ func (conn *TunnelConnection) connectToLocal() (net.Conn, error) {
 
 // proxyConnection handles bidirectional data transfer.
 func (conn *TunnelConnection) proxyConnection(localConn net.Conn, transformer *HeaderHostTransformer) {
-	defer func() { _ = localConn.Close() }()
+	defer func() { _ = localConn.Close() }() //nolint:errcheck // best-effort cleanup
 
 	// Create pipes for bidirectional communication
 	done := make(chan struct{}, bidirectionalChannelSize)
@@ -224,16 +224,16 @@ func (conn *TunnelConnection) proxyConnection(localConn net.Conn, transformer *H
 		defer func() { done <- struct{}{} }()
 
 		// For the first request, transform headers
-		_ = transformer.Transform(conn.conn, localConn)
+		_ = transformer.Transform(conn.conn, localConn) //nolint:errcheck // best-effort proxy
 
 		// Then copy the rest directly
-		_, _ = io.Copy(localConn, conn.conn)
+		_, _ = io.Copy(localConn, conn.conn) //nolint:errcheck // best-effort proxy copy
 	}()
 
 	// Local -> Remote
 	go func() {
 		defer func() { done <- struct{}{} }()
-		_, _ = io.Copy(conn.conn, localConn)
+		_, _ = io.Copy(conn.conn, localConn) //nolint:errcheck // best-effort proxy copy
 	}()
 
 	// Wait for either direction to complete
@@ -277,7 +277,7 @@ func (conn *TunnelConnection) close() {
 
 	conn.active = false
 	if conn.conn != nil {
-		_ = conn.conn.Close()
+		_ = conn.conn.Close() //nolint:errcheck // best-effort cleanup
 		conn.conn = nil
 	}
 }
