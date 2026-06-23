@@ -13,7 +13,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        go-version: ['1.21', '1.22', '1.23']
+        go-version: ['1.24']
     
     steps:
     - name: Check out code
@@ -41,10 +41,11 @@ jobs:
       run: go mod verify
 
     - name: Run tests
+      shell: bash
       run: go test -race -coverprofile=coverage.out -covermode=atomic -v ./...
 
     - name: Upload coverage to Codecov
-      if: matrix.os == 'ubuntu-latest' && matrix.go-version == '1.23'
+      if: matrix.os == 'ubuntu-latest' && matrix.go-version == '1.24'
       uses: codecov/codecov-action@v4
       with:
         file: ./coverage.out
@@ -62,7 +63,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: '1.23'
+        go-version: '1.24'
 
     - name: Cache Go modules
       uses: actions/cache@v4
@@ -70,18 +71,17 @@ jobs:
         path: |
           ~/.cache/go-build
           ~/go/pkg/mod
-        key: ${{ runner.os }}-go-1.23-${{ hashFiles('**/go.sum') }}
+        key: ${{ runner.os }}-go-1.24-${{ hashFiles('**/go.sum') }}
         restore-keys: |
-          ${{ runner.os }}-go-1.23-
+          ${{ runner.os }}-go-1.24-
 
     - name: Download dependencies
       run: go mod download
 
     - name: Run golangci-lint
-      uses: golangci/golangci-lint-action@v6
+      uses: golangci/golangci-lint-action@v8
       with:
-        version: latest
-        args: --timeout=5m
+        version: v2.12.2
 
   build:
     name: Build
@@ -89,8 +89,8 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        go-version: ['1.23']
-    
+        go-version: ['1.24']
+
     steps:
     - name: Check out code
       uses: actions/checkout@v4
@@ -147,7 +147,10 @@ jobs:
   security:
     name: Security Scan
     runs-on: ubuntu-latest
-    
+    permissions:
+      contents: read
+      security-events: write
+
     steps:
     - name: Check out code
       uses: actions/checkout@v4
@@ -155,14 +158,15 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: '1.23'
+        go-version: '1.24'
 
     - name: Run Gosec Security Scanner
-      uses: securecodewarrior/github-action-gosec@master
+      uses: securego/gosec@v2.27.1
       with:
         args: '-fmt sarif -out gosec.sarif ./...'
 
     - name: Upload SARIF file
+      if: always()
       uses: github/codeql-action/upload-sarif@v3
       with:
         sarif_file: gosec.sarif
@@ -180,7 +184,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: '1.23'
+        go-version: '1.24'
 
     - name: Test goreleaser
       uses: goreleaser/goreleaser-action@v6
